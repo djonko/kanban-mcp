@@ -198,6 +198,22 @@ assertions pitched at method+pathname+body (not Zod internals), `ensureTaskListI
 isolating the v2 task-list invariant, `passthrough()` on `CommentSchema`, the
 401-probe integration precheck, and the CI/integration split.
 
+### Self-review scorecard (cadence-forge:self-review, RFC-2119)
+
+**10 / 13 applicable hard checks passed.** Three MUST flags:
+- `common/types.ts` v1 `cardId` shim in `PlankaTaskSchema` — **fixed** (commit
+  `0a2032c`): dropped `cardId`; this branch is v2.1-only. Re-verified unit
+  55/55, integration 36/36.
+- `tests/integration/integration.test.ts` `: any` annotations (10 sites) and the
+  vacuous `expect(true).toBe(true)` at :331 — **inherited fork code**, out of
+  scope this pass (the file was moved as-is; the unit suite already locks the
+  label routes that line weakly tests). Tracked as inherited-fork follow-ups.
+
+Passing checks included clear naming, WHY comments on every added field/default,
+defensive `z.enum()` constraints, happy-path-before-edge ordering, no
+TODOs/FIXMEs, the shared `helpers.ts` (not over-engineered), and the extracted +
+tested pure `getNextActionSuggestion`.
+
 ## Recommended follow-up issues (priority order)
 1. **CRITICAL — untrack & rotate `.env`** (S-C1): `git rm --cached .env`, gitignore
    it, add `.env.example`, rotate `SECRET_KEY` + all passwords (in history),
