@@ -103,13 +103,11 @@ committed (added in `4aead19`), `.gitignore` has no `.env` entry, and there is n
 on `main`, `planka-v2.1-compat`, and the pushed `fork/planka-v2.1-compat`
 (`github.com/cameronsjo/kanban-mcp`) — present across 10 commits of history.
 `SECRET_KEY` is Planka's JWT/session signing key; a known signing key allows
-forged tokens against any instance using it. The reviewer (correctly) did not
-exfiltrate the values; the prevent-secret-leaks guard blocks reading them, so
-whether they are throwaway or live is unknown. **Needs the owner's decision**
-(real vs throwaway?), then: `git rm --cached .env`, add to `.gitignore`, ship a
-`.env.example`, rotate `SECRET_KEY` + all passwords (they are in history), and
-decide whether to scrub history (risky — shared with PR #10). NOT actioned this
-session.
+forged tokens against any instance using it. **Owner confirmed (2026-06-20) the
+committed values are demo/test only — never used on a live instance — so
+rotation is not required.** Forward-looking hygiene is still recommended (and
+left as a non-urgent follow-up): `git rm --cached .env`, add `.env` to
+`.gitignore`, and ship a `.env.example` so future real secrets aren't committed.
 
 **S-I2 — Hardcoded credentials in `package.json` `inspector:demo`** (= C2 above):
 real-looking `@cursor.com` agent email/password + `PLANKA_ADMIN_ID`. Remove or
@@ -215,9 +213,9 @@ TODOs/FIXMEs, the shared `helpers.ts` (not over-engineered), and the extracted +
 tested pure `getNextActionSuggestion`.
 
 ## Recommended follow-up issues (priority order)
-1. **CRITICAL — untrack & rotate `.env`** (S-C1): `git rm --cached .env`, gitignore
-   it, add `.env.example`, rotate `SECRET_KEY` + all passwords (in history),
-   decide on history scrub. **Owner decision required** (real vs throwaway values).
+1. **Untrack `.env` (hygiene, non-urgent)** (S-C1): values confirmed demo/test
+   by owner, so no rotation needed. Still worth `git rm --cached .env` + gitignore
+   + a `.env.example` so future real secrets aren't committed.
 2. **Validate/encode resource IDs** in URL paths (S-I3) — `^\d+$` in the Zod
    schemas or `encodeURIComponent`; closes the same-host path-traversal vector.
 3. **Handle the 2.1.x terms-acceptance gate** in `authenticateAgent` (F1).
