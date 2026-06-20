@@ -1,0 +1,32 @@
+name: CI
+
+# Fast, deterministic checks on every PR and on pushes to main. No Planka
+# required — the unit suite stubs fetch. Integration (live Planka) is a
+# separate, manually-triggered workflow so this path stays green.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (build)
+        run: npm run build
+
+      - name: Lint (Biome, scoped to new code)
+        run: npm run lint
+
+      - name: Unit tests + coverage
+        run: npm run test:unit -- --coverage
