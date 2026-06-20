@@ -13,25 +13,25 @@
  */
 
 import { afterAll, describe, expect, jest, test } from "@jest/globals";
-import * as boardMemberships from "../operations/boardMemberships.js";
-import * as boards from "../operations/boards.js";
-import * as cards from "../operations/cards.js";
-import * as comments from "../operations/comments.js";
-import * as labels from "../operations/labels.js";
-import * as lists from "../operations/lists.js";
-import * as projects from "../operations/projects.js";
-import * as tasks from "../operations/tasks.js";
+import * as boardMemberships from "../../operations/boardMemberships.js";
+import * as boards from "../../operations/boards.js";
+import * as cards from "../../operations/cards.js";
+import * as comments from "../../operations/comments.js";
+import * as labels from "../../operations/labels.js";
+import * as lists from "../../operations/lists.js";
+import * as projects from "../../operations/projects.js";
+import * as tasks from "../../operations/tasks.js";
 
 // Import custom tools
 import {
   createCardWithTasks,
   getBoardSummary,
   getCardDetails,
-} from "../tools/index.js";
+} from "../../tools/index.js";
 
 // Import utilities for direct API calls
-import { getAdminUserId } from "../common/setup.js";
-import { plankaRequest } from "../common/utils.js";
+import { getAdminUserId } from "../../common/setup.js";
+import { plankaRequest } from "../../common/utils.js";
 
 // Test data
 const testPrefix = `test-${Date.now()}`;
