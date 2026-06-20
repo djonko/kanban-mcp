@@ -22,7 +22,10 @@ afterEach(() => {
 
 describe("buildUrl", () => {
   it("appends query parameters", () => {
-    const result = buildUrl("http://h.test/api/projects", { page: 1, perPage: 10 });
+    const result = buildUrl("http://h.test/api/projects", {
+      page: 1,
+      perPage: 10,
+    });
     const url = new URL(result);
     expect(url.searchParams.get("page")).toBe("1");
     expect(url.searchParams.get("perPage")).toBe("10");
@@ -74,7 +77,9 @@ describe("plankaRequest", () => {
     try {
       const spy = mockFetch();
       await plankaRequest("/api/projects", { skipAuth: true });
-      expect(onlyBusinessCall(spy).url).toBe("http://localhost:3333/api/projects");
+      expect(onlyBusinessCall(spy).url).toBe(
+        "http://localhost:3333/api/projects",
+      );
     } finally {
       process.env.PLANKA_BASE_URL = original;
     }
@@ -83,7 +88,9 @@ describe("plankaRequest", () => {
   it("prefixes /api/ when the path does not start with it", async () => {
     const spy = mockFetch();
     await plankaRequest("projects", { skipAuth: true });
-    expect(onlyBusinessCall(spy).url).toBe("http://localhost:3333/api/projects");
+    expect(onlyBusinessCall(spy).url).toBe(
+      "http://localhost:3333/api/projects",
+    );
   });
 
   it("attaches an Authorization: Bearer header from the access token", async () => {
@@ -126,8 +133,8 @@ describe("plankaRequest", () => {
 
   it("throws when the response is not ok", async () => {
     mockFetch(() => ({ status: 422, body: { message: "Validation failed" } }));
-    await expect(plankaRequest("/api/projects", { skipAuth: true })).rejects.toThrow(
-      "Validation failed",
-    );
+    await expect(
+      plankaRequest("/api/projects", { skipAuth: true }),
+    ).rejects.toThrow("Validation failed");
   });
 });

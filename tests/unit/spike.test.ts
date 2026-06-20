@@ -20,14 +20,12 @@ describe("harness spike: ESM + ts-jest + fetch spy", () => {
   });
 
   it("can spy on global fetch", async () => {
-    const spy = jest
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response("{}", {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      );
+    const spy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
 
     await fetch("http://x.test/ping");
 

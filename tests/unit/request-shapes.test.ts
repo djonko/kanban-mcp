@@ -7,14 +7,6 @@
  * one of these fails loudly.
  */
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-
-import {
-  createComment,
-  deleteComment,
-  getComments,
-  updateComment,
-} from "../../operations/comments.js";
-import { addLabelToCard, removeLabelFromCard } from "../../operations/labels.js";
 import {
   createBoardMembership,
   deleteBoardMembership,
@@ -22,9 +14,19 @@ import {
   getBoardMemberships,
   updateBoardMembership,
 } from "../../operations/boardMemberships.js";
-import { createTask } from "../../operations/tasks.js";
-import { createList } from "../../operations/lists.js";
 import { createCard } from "../../operations/cards.js";
+import {
+  createComment,
+  deleteComment,
+  getComments,
+  updateComment,
+} from "../../operations/comments.js";
+import {
+  addLabelToCard,
+  removeLabelFromCard,
+} from "../../operations/labels.js";
+import { createList } from "../../operations/lists.js";
+import { createTask } from "../../operations/tasks.js";
 
 import {
   businessCalls,
@@ -154,7 +156,11 @@ describe("board memberships (Planka v2: nested create, board-detail list, flat b
       return undefined;
     });
 
-    await createBoardMembership({ boardId: "b1", userId: "u1", role: "editor" });
+    await createBoardMembership({
+      boardId: "b1",
+      userId: "u1",
+      role: "editor",
+    });
 
     const call = onlyBusinessCall(spy);
     expect(path(call.url)).toBe("/api/boards/b1/board-memberships");
@@ -166,7 +172,9 @@ describe("board memberships (Planka v2: nested create, board-detail list, flat b
     const item = membership();
     const spy = mockFetch((url) => {
       if (path(url) === "/api/boards/b1") {
-        return { body: { item: { id: "b1" }, included: { boardMemberships: [item] } } };
+        return {
+          body: { item: { id: "b1" }, included: { boardMemberships: [item] } },
+        };
       }
       return undefined;
     });
@@ -229,7 +237,12 @@ describe("tasks (Planka v2: tasks nested under task-lists via ensureTaskListId)"
     const spy = mockFetch((url, init) => {
       const p = path(url);
       if (p === "/api/cards/c1" && methodOf(init) === "GET") {
-        return { body: { item: { id: "c1" }, included: { taskLists: [{ id: "tl1" }] } } };
+        return {
+          body: {
+            item: { id: "c1" },
+            included: { taskLists: [{ id: "tl1" }] },
+          },
+        };
       }
       if (p === "/api/task-lists/tl1/tasks" && methodOf(init) === "POST") {
         return { body: { item: { id: "t1", name: "Task A" } } };
@@ -244,7 +257,10 @@ describe("tasks (Planka v2: tasks nested under task-lists via ensureTaskListId)"
       "GET /api/cards/c1",
       "POST /api/task-lists/tl1/tasks",
     ]);
-    expect(jsonBody(calls[1].init)).toEqual({ name: "Task A", position: 65535 });
+    expect(jsonBody(calls[1].init)).toEqual({
+      name: "Task A",
+      position: 65535,
+    });
   });
 
   it("createTask creates a task list when the card has none, then POSTs the task", async () => {
@@ -326,9 +342,16 @@ describe("create-chain (Planka v2.1: required `type` on list/card create)", () =
       return undefined;
     });
 
-    await createList({ boardId: "b1", name: "Done", position: 2, type: "closed" });
+    await createList({
+      boardId: "b1",
+      name: "Done",
+      position: 2,
+      type: "closed",
+    });
 
-    expect(jsonBody(onlyBusinessCall(spy).init)).toMatchObject({ type: "closed" });
+    expect(jsonBody(onlyBusinessCall(spy).init)).toMatchObject({
+      type: "closed",
+    });
   });
 
   it("createCard → POST /api/lists/:id/cards defaults type to 'project'", async () => {
@@ -385,8 +408,15 @@ describe("create-chain (Planka v2.1: required `type` on list/card create)", () =
       return undefined;
     });
 
-    await createCard({ listId: "l1", name: "Story", position: 1, type: "story" });
+    await createCard({
+      listId: "l1",
+      name: "Story",
+      position: 1,
+      type: "story",
+    });
 
-    expect(jsonBody(onlyBusinessCall(spy).init)).toMatchObject({ type: "story" });
+    expect(jsonBody(onlyBusinessCall(spy).init)).toMatchObject({
+      type: "story",
+    });
   });
 });

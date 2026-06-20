@@ -26,8 +26,13 @@ export function jsonResponse(
   status = 200,
   contentType = "application/json",
 ): Response {
-  const text = contentType.includes("json") ? JSON.stringify(body) : String(body);
-  return new Response(text, { status, headers: { "content-type": contentType } });
+  const text = contentType.includes("json")
+    ? JSON.stringify(body)
+    : String(body);
+  return new Response(text, {
+    status,
+    headers: { "content-type": contentType },
+  });
 }
 
 /**
@@ -40,14 +45,21 @@ export function jsonResponse(
  */
 export function mockFetch(responder?: FetchResponder) {
   const spy = jest.spyOn(globalThis, "fetch");
-  spy.mockImplementation(((input: unknown, init?: RequestInit): Promise<Response> => {
+  spy.mockImplementation(((
+    input: unknown,
+    init?: RequestInit,
+  ): Promise<Response> => {
     const url = urlOf(input);
     if (url.includes("/api/access-tokens")) {
       return Promise.resolve(jsonResponse({ item: "test-token" }));
     }
     const result = responder?.(url, init);
     return Promise.resolve(
-      jsonResponse(result?.body ?? {}, result?.status ?? 200, result?.contentType),
+      jsonResponse(
+        result?.body ?? {},
+        result?.status ?? 200,
+        result?.contentType,
+      ),
     );
   }) as unknown as typeof fetch);
   return spy;
@@ -71,7 +83,9 @@ export function businessCalls(spy: FetchSpy): RecordedCall[] {
 export function onlyBusinessCall(spy: FetchSpy): RecordedCall {
   const calls = businessCalls(spy);
   if (calls.length !== 1) {
-    throw new Error(`Expected exactly 1 business call, saw ${calls.length}: ${calls.map((c) => c.url).join(", ")}`);
+    throw new Error(
+      `Expected exactly 1 business call, saw ${calls.length}: ${calls.map((c) => c.url).join(", ")}`,
+    );
   }
   return calls[0];
 }
@@ -80,7 +94,9 @@ export function methodOf(init: RequestInit | undefined): string {
   return (init?.method ?? "GET").toUpperCase();
 }
 
-export function headersOf(init: RequestInit | undefined): Record<string, string> {
+export function headersOf(
+  init: RequestInit | undefined,
+): Record<string, string> {
   return (init?.headers as Record<string, string>) ?? {};
 }
 
