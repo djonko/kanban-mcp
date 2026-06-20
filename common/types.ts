@@ -14,7 +14,9 @@ export const PlankaUserSchema = z.object({
 export const PlankaProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
-  background: z.string().nullable(),
+  // Planka 2.1.1 omits `background` entirely when none is set (not even null),
+  // so the field must be optional as well as nullable.
+  background: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string().nullable(),
 });
