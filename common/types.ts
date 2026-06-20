@@ -69,7 +69,11 @@ export const PlankaCardSchema = z.object({
 
 export const PlankaTaskSchema = z.object({
   id: z.string(),
-  cardId: z.string(),
+  // Planka v2.1 nests tasks under task lists, so the task carries taskListId
+  // (not cardId). cardId/linkedCardId stay optional for v1 + linked-card cases.
+  cardId: z.string().optional(),
+  taskListId: z.string().optional(),
+  linkedCardId: z.string().nullable().optional(),
   name: z.string(),
   isCompleted: z.boolean(),
   position: z.number(),

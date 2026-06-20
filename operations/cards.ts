@@ -17,12 +17,17 @@ import { PlankaCardSchema, PlankaStopwatchSchema } from "../common/types.js";
  * @property {string} name - The name of the card
  * @property {string} [description] - The description of the card
  * @property {number} [position] - The position of the card in the list (default: 65535)
+ * @property {string} [type] - The card type (default: project)
  */
 export const CreateCardSchema = z.object({
     listId: z.string().describe("List ID"),
     name: z.string().describe("Card name"),
     description: z.string().optional().describe("Card description"),
     position: z.number().optional().describe("Card position (default: 65535)"),
+    // Planka v2.1 requires a card type on create (project | story).
+    type: z.enum(["project", "story"]).optional().describe(
+        "Card type (default: project)",
+    ),
 });
 
 /**
@@ -144,6 +149,8 @@ export async function createCard(options: CreateCardOptions) {
                     name: options.name,
                     description: options.description,
                     position: options.position,
+                    // Planka v2.1 requires `type`; default to a standard project card.
+                    type: options.type ?? "project",
                 },
             },
         );
