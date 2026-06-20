@@ -23,6 +23,8 @@ import {
   updateBoardMembership,
 } from "../../operations/boardMemberships.js";
 import { createTask } from "../../operations/tasks.js";
+import { createList } from "../../operations/lists.js";
+import { createCard } from "../../operations/cards.js";
 
 import {
   businessCalls,
@@ -270,5 +272,121 @@ describe("tasks (Planka v2: tasks nested under task-lists via ensureTaskListId)"
     ]);
     expect(jsonBody(calls[1].init)).toEqual({ name: "Tasks", position: 65535 });
     expect(jsonBody(calls[2].init)).toEqual({ name: "Task B", position: 100 });
+  });
+});
+
+describe("create-chain (Planka v2.1: required `type` on list/card create)", () => {
+  it("createList → POST /api/boards/:id/lists defaults type to 'active'", async () => {
+    const spy = mockFetch((url, init) => {
+      if (path(url) === "/api/boards/b1/lists" && methodOf(init) === "POST") {
+        return {
+          body: {
+            item: {
+              id: "l1",
+              boardId: "b1",
+              name: "Todo",
+              position: 1,
+              createdAt: "2020-01-01T00:00:00.000Z",
+              updatedAt: null,
+            },
+          },
+        };
+      }
+      return undefined;
+    });
+
+    await createList({ boardId: "b1", name: "Todo", position: 1 });
+
+    const call = onlyBusinessCall(spy);
+    expect(path(call.url)).toBe("/api/boards/b1/lists");
+    expect(methodOf(call.init)).toBe("POST");
+    expect(jsonBody(call.init)).toMatchObject({
+      name: "Todo",
+      position: 1,
+      type: "active",
+    });
+  });
+
+  it("createList honors an explicit list type", async () => {
+    const spy = mockFetch((url) => {
+      if (path(url) === "/api/boards/b1/lists") {
+        return {
+          body: {
+            item: {
+              id: "l1",
+              boardId: "b1",
+              name: "Done",
+              position: 2,
+              createdAt: "2020-01-01T00:00:00.000Z",
+              updatedAt: null,
+            },
+          },
+        };
+      }
+      return undefined;
+    });
+
+    await createList({ boardId: "b1", name: "Done", position: 2, type: "closed" });
+
+    expect(jsonBody(onlyBusinessCall(spy).init)).toMatchObject({ type: "closed" });
+  });
+
+  it("createCard → POST /api/lists/:id/cards defaults type to 'project'", async () => {
+    const spy = mockFetch((url, init) => {
+      if (path(url) === "/api/lists/l1/cards" && methodOf(init) === "POST") {
+        return {
+          body: {
+            item: {
+              id: "c1",
+              listId: "l1",
+              name: "Card",
+              description: null,
+              position: 1,
+              dueDate: null,
+              createdAt: "2020-01-01T00:00:00.000Z",
+              updatedAt: null,
+            },
+          },
+        };
+      }
+      return undefined;
+    });
+
+    await createCard({ listId: "l1", name: "Card", position: 1 });
+
+    const call = onlyBusinessCall(spy);
+    expect(path(call.url)).toBe("/api/lists/l1/cards");
+    expect(methodOf(call.init)).toBe("POST");
+    expect(jsonBody(call.init)).toMatchObject({
+      name: "Card",
+      position: 1,
+      type: "project",
+    });
+  });
+
+  it("createCard honors an explicit card type", async () => {
+    const spy = mockFetch((url) => {
+      if (path(url) === "/api/lists/l1/cards") {
+        return {
+          body: {
+            item: {
+              id: "c1",
+              listId: "l1",
+              name: "Story",
+              description: null,
+              position: 1,
+              dueDate: null,
+              createdAt: "2020-01-01T00:00:00.000Z",
+              updatedAt: null,
+            },
+          },
+        };
+      }
+      return undefined;
+    });
+
+    await createCard({ listId: "l1", name: "Story", position: 1, type: "story" });
+
+    expect(jsonBody(onlyBusinessCall(spy).init)).toMatchObject({ type: "story" });
   });
 });
