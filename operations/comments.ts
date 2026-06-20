@@ -129,23 +129,19 @@ export async function createComment(options: CreateCommentOptions) {
  * @returns {Promise<Array<object>>} Array of comments on the card
  */
 export async function getComments(cardId: string) {
-    try {
-        const response = await plankaRequest(`/api/cards/${cardId}/comments`);
+    // Let request errors propagate; only a genuinely empty card yields [].
+    const response = await plankaRequest(`/api/cards/${cardId}/comments`);
 
-        try {
-            const parsedResponse = CommentsResponseSchema.parse(response);
-            return parsedResponse.items;
-        } catch (parseError) {
-            if (Array.isArray(response)) {
-                return z.array(CommentSchema).parse(response);
-            }
-            throw new Error(
-                `Could not parse comments response: ${JSON.stringify(response)}`,
-            );
+    try {
+        const parsedResponse = CommentsResponseSchema.parse(response);
+        return parsedResponse.items;
+    } catch (parseError) {
+        if (Array.isArray(response)) {
+            return z.array(CommentSchema).parse(response);
         }
-    } catch (error) {
-        // If all else fails, return an empty array
-        return [];
+        throw new Error(
+            `Could not parse comments response: ${JSON.stringify(response)}`,
+        );
     }
 }
 

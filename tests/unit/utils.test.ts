@@ -137,4 +137,28 @@ describe("plankaRequest", () => {
       plankaRequest("/api/projects", { skipAuth: true }),
     ).rejects.toThrow("Validation failed");
   });
+
+  it("clears the cached token and retries once on a 401", async () => {
+    let widgetHits = 0;
+    const spy = mockFetch((url) => {
+      if (url.includes("/api/widgets")) {
+        widgetHits += 1;
+        // First business call: cached token rejected. Retry: succeeds.
+        return widgetHits === 1
+          ? { status: 401, body: { message: "token expired" } }
+          : { body: { ok: true } };
+      }
+      return undefined;
+    });
+
+    const result = await plankaRequest("/api/widgets");
+
+    expect(result).toEqual({ ok: true });
+    // The business endpoint was hit twice (401 then 200): a re-auth happened
+    // between attempts, so the retry carried a fresh token.
+    const widgetCalls = businessCalls(spy).filter((c) =>
+      c.url.includes("/api/widgets"),
+    );
+    expect(widgetCalls).toHaveLength(2);
+  });
 });

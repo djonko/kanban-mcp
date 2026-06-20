@@ -145,31 +145,27 @@ export async function createBoardMembership(
  * @throws {Error} If retrieving board memberships fails
  */
 export async function getBoardMemberships(boardId: string) {
-    try {
-        // Planka v2 has no list route; board memberships ride along in the
-        // board detail's `included.boardMemberships`.
-        const response = await plankaRequest(`/api/boards/${boardId}`);
+    // Planka v2 has no list route; board memberships ride along in the board
+    // detail's `included.boardMemberships`. Let request errors propagate;
+    // return [] only when there genuinely are none.
+    const response = await plankaRequest(`/api/boards/${boardId}`);
 
-        if (
-            response &&
-            typeof response === "object" &&
-            "included" in response &&
-            response.included &&
-            typeof response.included === "object" &&
-            "boardMemberships" in (response.included as Record<string, unknown>)
-        ) {
-            const memberships =
-                (response.included as Record<string, unknown>).boardMemberships;
-            if (Array.isArray(memberships)) {
-                return memberships;
-            }
+    if (
+        response &&
+        typeof response === "object" &&
+        "included" in response &&
+        response.included &&
+        typeof response.included === "object" &&
+        "boardMemberships" in (response.included as Record<string, unknown>)
+    ) {
+        const memberships =
+            (response.included as Record<string, unknown>).boardMemberships;
+        if (Array.isArray(memberships)) {
+            return memberships;
         }
-
-        return [];
-    } catch (error) {
-        // If all else fails, return an empty array
-        return [];
     }
+
+    return [];
 }
 
 /**
