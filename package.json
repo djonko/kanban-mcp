@@ -1,6 +1,6 @@
 {
   "name": "mcp-kanban",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "MCP server for kanban board",
   "license": "MIT",
   "author": "Brad Risse",
@@ -35,8 +35,6 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.6.1",
     "@types/node": "^22",
-    "@types/node-fetch": "^2.6.12",
-    "node-fetch": "^3.3.2",
     "universal-user-agent": "^7.0.2",
     "zod": "^3.22.4",
     "zod-to-json-schema": "^3.23.5"

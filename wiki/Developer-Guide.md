@@ -320,13 +320,13 @@ If you need to add support for new Planka API endpoints:
 The project uses Jest for unit testing:
 
 ```bash
-# Run all tests
+# Run the unit suite (no Planka required — fetch is stubbed)
 npm test
 
-# Run tests with coverage
+# Run unit tests with coverage
 npm run test:coverage
 
-# Run tests in watch mode
+# Run unit tests in watch mode
 npm run test:watch
 ```
 
@@ -335,7 +335,10 @@ npm run test:watch
 To test the integration with Planka:
 
 1. Ensure Planka is running: `npm run up`
-2. Run the integration tests: `npm run test:integration`
+2. On a freshly-provisioned Planka 2.1.x, accept the terms-of-service gate once
+   so the agent can authenticate:
+   `bash scripts/accept-planka-terms.sh http://localhost:3333 demo@demo.demo demo`
+3. Run the integration tests: `npm run test:integration`
 
 ### 🤖 Testing with Cursor
 
