@@ -2,7 +2,9 @@ version: "3"
 
 services:
   kanban:
-    image: ghcr.io/plankanban/planka:latest
+    # Pinned to the version the v2.1 route work was verified against (see
+    # commit 764821a) for reproducible integration runs. Bump deliberately.
+    image: ghcr.io/plankanban/planka:2.1.1
     container_name: kanban
     restart: unless-stopped
     ports:
