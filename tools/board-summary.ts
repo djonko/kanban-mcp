@@ -195,7 +195,7 @@ export async function getBoardSummary(params: GetBoardSummaryParams) {
  * @param {number} testingCount - Number of cards in the Testing list
  * @returns {string} A suggestion for the next action to take
  */
-function getNextActionSuggestion(
+export function getNextActionSuggestion(
     backlogCount: number,
     inProgressCount: number,
     testingCount: number,
