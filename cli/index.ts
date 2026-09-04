@@ -14,6 +14,11 @@ import {
   type PreparedOidcLogin,
   type PrepareOidcLoginDependencies,
 } from "./oidc-login.js";
+import {
+  launchBrowser as defaultLaunchBrowser,
+  redactAuthorizationUrl,
+  type BrowserLaunchResult,
+} from "./browser-launch.js";
 
 export type Command =
   | { command: "server" }
@@ -59,6 +64,8 @@ export interface OidcLoginDependencies {
   startOidcCallbackServer: (
     options: OidcCallbackServerOptions,
   ) => Promise<OidcCallbackServerHandle>;
+  launchBrowser: (authorizationUrl: URL) => Promise<BrowserLaunchResult>;
+  writeError: (message: string) => void;
 }
 
 export interface OidcLoginResult extends PreparedOidcLogin {
@@ -95,6 +102,31 @@ export async function oidcLogin(
     responseMode: expectation.responseMode,
     expectedState: expectation.expectedState,
   });
+
+  const launchBrowser = dependencies.launchBrowser ?? defaultLaunchBrowser;
+  const writeError = dependencies.writeError ?? ((message: string) => {
+    console.error(message);
+  });
+  let launchResult: BrowserLaunchResult;
+  try {
+    launchResult = await launchBrowser(prepared.authorizationUrl);
+  } catch {
+    launchResult = { launched: false };
+  }
+  try {
+    if (!launchResult.launched) {
+      writeError("Could not open the authorization page automatically.");
+      writeError(
+        `Redacted authorization URL for troubleshooting: ${redactAuthorizationUrl(
+          prepared.authorizationUrl,
+        )}`,
+      );
+      writeError("The login listener is still waiting for the browser callback.");
+    }
+  } catch (error) {
+    await callbackServer.close();
+    throw error;
+  }
 
   return { ...prepared, callbackServer };
 }
