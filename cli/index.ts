@@ -1,4 +1,9 @@
 import { VERSION } from "../common/version.js";
+import {
+  prepareOidcLogin as defaultPrepareOidcLogin,
+  type PreparedOidcLogin,
+  type PrepareOidcLoginDependencies,
+} from "./oidc-login.js";
 
 export type Command =
   | { command: "server" }
@@ -7,7 +12,7 @@ export type Command =
 
 export interface CliDependencies {
   startServer: () => Promise<void>;
-  oidcLogin: () => Promise<void>;
+  oidcLogin: () => Promise<unknown>;
   writeError: (message: string) => void;
 }
 
@@ -27,7 +32,7 @@ export function resolveCommand(argv: string[]): Command {
     "",
     "Usage:",
     "  planka-mcp-server              Start the MCP stdio server (default)",
-    "  planka-mcp-server oidc-login   Perform OIDC device-code login",
+    "  planka-mcp-server oidc-login   Prepare an OIDC authorization request",
     "",
     `Unknown command: ${arg}`,
   ].join("\n");
@@ -35,10 +40,25 @@ export function resolveCommand(argv: string[]): Command {
   return { command: "error", message: usage };
 }
 
+export interface OidcLoginDependencies {
+  prepareOidcLogin: (
+    baseUrl: string,
+    dependencies?: Partial<PrepareOidcLoginDependencies>,
+  ) => Promise<PreparedOidcLogin>;
+}
+
 export async function oidcLogin(
-  writeError: (message: string) => void = console.error,
-): Promise<void> {
-  writeError("OIDC login is not yet implemented. This is a placeholder command.");
+  dependencies: Partial<OidcLoginDependencies> = {},
+): Promise<PreparedOidcLogin> {
+  const prepare =
+    dependencies.prepareOidcLogin ?? defaultPrepareOidcLogin;
+
+  const baseUrl = process.env.PLANKA_BASE_URL;
+  if (!baseUrl) {
+    throw new Error("PLANKA_BASE_URL is required for OIDC login");
+  }
+
+  return prepare(baseUrl);
 }
 
 export async function runCli(

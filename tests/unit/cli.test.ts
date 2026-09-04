@@ -33,18 +33,106 @@ describe("resolveCommand", () => {
 });
 
 describe("oidcLogin", () => {
+  const originalBaseUrl = process.env.PLANKA_BASE_URL;
+
   afterEach(() => {
     jest.restoreAllMocks();
+    if (originalBaseUrl === undefined) {
+      delete process.env.PLANKA_BASE_URL;
+    } else {
+      process.env.PLANKA_BASE_URL = originalBaseUrl;
+    }
   });
 
-  it("prints a placeholder message to stderr", async () => {
+  it("returns prepared login data without logging the authorization URL", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const stderr = jest.spyOn(console, "error").mockImplementation(() => {});
+    const prepareOidcLogin =
+      jest.fn<
+        (
+          baseUrl: string,
+          deps?: unknown,
+        ) => Promise<{ authorizationUrl: URL; nonce: string }>
+      >();
+    prepareOidcLogin.mockResolvedValue({
+      authorizationUrl: new URL(
+        "https://idp.example/auth?client_id=x&nonce=n1",
+      ),
+      nonce: "n1",
+    });
+
+    const result = await oidcLogin({ prepareOidcLogin });
+
+    expect(prepareOidcLogin).toHaveBeenCalledWith("https://planka.example");
+    expect(result.authorizationUrl.hostname).toBe("idp.example");
+    expect(result.nonce).toBe("n1");
+    expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it("returns 0 on success through runCli", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
     const writeError = jest.fn<(message: string) => void>();
+    const prepareOidcLogin =
+      jest.fn<() => Promise<{ authorizationUrl: URL; nonce: string }>>();
+    prepareOidcLogin.mockResolvedValue({
+      authorizationUrl: new URL("https://idp.example/auth?nonce=n"),
+      nonce: "n",
+    });
 
-    await oidcLogin(writeError);
+    const result = await runCli(["node", "dist/index.js", "oidc-login"], {
+      startServer: jest.fn<() => Promise<void>>(),
+      oidcLogin: () => oidcLogin({ prepareOidcLogin }),
+      writeError,
+    });
 
-    expect(writeError).toHaveBeenCalledWith(
-      expect.stringContaining("not yet implemented"),
+    expect(result).toBe(0);
+  });
+
+  it("returns non-zero on preparation failure", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const writeError = jest.fn<(message: string) => void>();
+    const prepareOidcLogin =
+      jest.fn<() => Promise<{ authorizationUrl: URL; nonce: string }>>();
+    prepareOidcLogin.mockRejectedValue(
+      new Error("Planka bootstrap request failed with HTTP 503"),
     );
+
+    const result = await runCli(["node", "dist/index.js", "oidc-login"], {
+      startServer: jest.fn<() => Promise<void>>(),
+      oidcLogin: () => oidcLogin({ prepareOidcLogin }),
+      writeError,
+    });
+
+    expect(result).toBe(1);
+    expect(writeError).toHaveBeenCalledWith(
+      expect.stringContaining("HTTP 503"),
+    );
+  });
+
+  it("rejects clearly when PLANKA_BASE_URL is missing", async () => {
+    delete process.env.PLANKA_BASE_URL;
+
+    await expect(oidcLogin()).rejects.toThrow("PLANKA_BASE_URL is required");
+  });
+
+  it("never starts the MCP server", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const writeError = jest.fn<(message: string) => void>();
+    const startServer = jest.fn<() => Promise<void>>();
+    const prepareOidcLogin =
+      jest.fn<() => Promise<{ authorizationUrl: URL; nonce: string }>>();
+    prepareOidcLogin.mockResolvedValue({
+      authorizationUrl: new URL("https://idp.example/auth?nonce=n"),
+      nonce: "n",
+    });
+
+    await runCli(["node", "dist/index.js", "oidc-login"], {
+      startServer,
+      oidcLogin: () => oidcLogin({ prepareOidcLogin }),
+      writeError,
+    });
+
+    expect(startServer).not.toHaveBeenCalled();
   });
 });
 
