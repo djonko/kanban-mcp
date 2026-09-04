@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: gitea-runner3
     steps:
       - uses: actions/checkout@v4
 
