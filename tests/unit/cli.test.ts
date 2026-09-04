@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import type { BrowserLaunchResult } from "../../cli/browser-launch.js";
 import {
   type OidcLoginResult,
   oidcLogin,
@@ -6,6 +7,7 @@ import {
   runCli,
 } from "../../cli/index.js";
 import type { OidcCallbackServerHandle } from "../../cli/oidc-callback-server.js";
+import type { PreparedOidcLogin } from "../../cli/oidc-login.js";
 
 function callbackDependencies() {
   const close = jest.fn<() => Promise<void>>().mockResolvedValue();
@@ -25,6 +27,9 @@ function callbackDependencies() {
     startOidcCallbackServer: jest
       .fn<() => Promise<OidcCallbackServerHandle>>()
       .mockResolvedValue(callbackServer),
+    launchBrowser: jest
+      .fn<(authorizationUrl: URL) => Promise<{ launched: boolean }>>()
+      .mockResolvedValue({ launched: true }),
     callbackServer,
   };
 }
@@ -223,6 +228,98 @@ describe("oidcLogin", () => {
     });
 
     expect(startServer).not.toHaveBeenCalled();
+  });
+
+  it("continues waiting when browser launch fails", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const writeError = jest.fn<(message: string) => void>();
+    let resolveCallback: (value: { code: string }) => void = () => {};
+    const callback = callbackDependencies();
+    callback.callbackServer.waitForCallback = new Promise((resolve) => {
+      resolveCallback = resolve;
+    });
+    const prepareOidcLogin = jest
+      .fn<() => Promise<PreparedOidcLogin>>()
+      .mockResolvedValue({
+        authorizationUrl: new URL(
+          "https://idp.example/auth?client_id=public&nonce=secret-nonce&state=secret-state&redirect_uri=http%3A%2F%2F127.0.0.1%3A18931%2Fcallback&response_mode=query",
+        ),
+        nonce: "secret-nonce",
+        expectedState: "secret-state",
+      });
+    const launchBrowser = jest
+      .fn<(authorizationUrl: URL) => Promise<BrowserLaunchResult>>()
+      .mockResolvedValue({ launched: false });
+
+    let settled = false;
+    const resultPromise = runCli(["node", "dist/index.js", "oidc-login"], {
+      startServer: jest.fn<() => Promise<void>>(),
+      oidcLogin: () =>
+        oidcLogin({
+          prepareOidcLogin,
+          ...callback,
+          launchBrowser,
+          writeError,
+        }),
+      writeError,
+    }).then((result) => {
+      settled = true;
+      return result;
+    });
+
+    for (let index = 0; index < 5; index += 1) {
+      await Promise.resolve();
+    }
+    expect(launchBrowser).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    expect(callback.callbackServer.close).not.toHaveBeenCalled();
+    expect(writeError).toHaveBeenCalledWith(
+      "Could not open the authorization page automatically.",
+    );
+    expect(writeError.mock.calls.flat().join(" ")).not.toContain("secret-");
+
+    resolveCallback({ code: "callback-code" });
+    await expect(resultPromise).resolves.toBe(0);
+  });
+
+  it("keeps callback failure authoritative after browser launch failure", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const writeError = jest.fn<(message: string) => void>();
+    const callback = callbackDependencies();
+    callback.callbackServer.waitForCallback = Promise.reject(
+      new Error("callback timeout"),
+    );
+    void callback.callbackServer.waitForCallback.catch(() => {});
+    const prepareOidcLogin = jest
+      .fn<() => Promise<PreparedOidcLogin>>()
+      .mockResolvedValue({
+        authorizationUrl: new URL(
+          "https://idp.example/auth?nonce=secret-nonce&state=secret-state&redirect_uri=http%3A%2F%2F127.0.0.1%3A18931%2Fcallback&response_mode=query",
+        ),
+        nonce: "secret-nonce",
+        expectedState: "secret-state",
+      });
+    const launchBrowser = jest
+      .fn<(authorizationUrl: URL) => Promise<BrowserLaunchResult>>()
+      .mockRejectedValue(new Error("launcher failed with state=secret-state"));
+
+    const result = await runCli(["node", "dist/index.js", "oidc-login"], {
+      startServer: jest.fn<() => Promise<void>>(),
+      oidcLogin: () =>
+        oidcLogin({
+          prepareOidcLogin,
+          ...callback,
+          launchBrowser,
+          writeError,
+        }),
+      writeError,
+    });
+
+    expect(result).toBe(1);
+    expect(writeError.mock.calls.flat().join(" ")).toContain(
+      "callback timeout",
+    );
+    expect(writeError.mock.calls.flat().join(" ")).not.toContain("secret-");
   });
 });
 
