@@ -8,6 +8,7 @@ import {
 } from "../../cli/index.js";
 import type { OidcCallbackServerHandle } from "../../cli/oidc-callback-server.js";
 import type { PreparedOidcLogin } from "../../cli/oidc-login.js";
+import { getDefaultTokenPath } from "../../common/auth-config.js";
 import type { ExchangeOidcCodeResult } from "../../operations/oidc.js";
 
 function callbackDependencies() {
@@ -39,6 +40,9 @@ function callbackDependencies() {
         ) => Promise<ExchangeOidcCodeResult>
       >()
       .mockResolvedValue({ accessToken: "test-access-token" }),
+    writeStoredToken: jest
+      .fn<(tokenFile: string, token: string) => Promise<void>>()
+      .mockResolvedValue(),
     callbackServer,
   };
 }
@@ -121,8 +125,40 @@ describe("oidcLogin", () => {
       { code: "callback-code", nonce: "n1" },
     );
     expect(callback.exchangeOidcCode).toHaveBeenCalledTimes(1);
-    expect(result.accessToken).toBe("test-access-token");
+    expect(callback.writeStoredToken).toHaveBeenCalledWith(
+      "/tmp/token",
+      "test-access-token",
+    );
+    expect(callback.writeStoredToken).toHaveBeenCalledTimes(1);
+    expect(result.tokenFile).toBe("/tmp/token");
     expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it("uses the default configured token path when no override is set", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const callback = callbackDependencies();
+    callback.getAuthConfig = () => ({
+      method: "oidc" as const,
+      tokenFile: getDefaultTokenPath(),
+      callbackHost: "127.0.0.1",
+      callbackPort: 18931,
+    });
+    const prepareOidcLogin = jest
+      .fn<() => Promise<PreparedOidcLogin>>()
+      .mockResolvedValue({
+        authorizationUrl: new URL(
+          "https://idp.example/auth?redirect_uri=http%3A%2F%2F127.0.0.1%3A18931%2Fcallback&response_mode=query",
+        ),
+        nonce: "nonce",
+        expectedState: "state",
+      });
+
+    await oidcLogin({ prepareOidcLogin, ...callback });
+
+    expect(callback.writeStoredToken).toHaveBeenCalledWith(
+      getDefaultTokenPath(),
+      "test-access-token",
+    );
   });
 
   it("returns 0 on success through runCli", async () => {
@@ -155,6 +191,9 @@ describe("oidcLogin", () => {
     });
 
     expect(result).toBe(0);
+    expect(writeError.mock.calls.flat().join(" ")).not.toContain(
+      "test-access-token",
+    );
   });
 
   it("returns non-zero when the callback fails", async () => {
@@ -203,6 +242,7 @@ describe("oidcLogin", () => {
       oidcLogin({ ...callback, prepareOidcLogin, exchangeOidcCode }),
     ).rejects.toThrow("callback denied");
     expect(exchangeOidcCode).not.toHaveBeenCalled();
+    expect(callback.writeStoredToken).not.toHaveBeenCalled();
   });
 
   it("reports exchange failure without exposing exchange secrets", async () => {
@@ -248,6 +288,49 @@ describe("oidcLogin", () => {
     expect(messages).not.toContain("SECRET_STATE");
     expect(messages).not.toContain("SECRET_ACCESS_TOKEN");
     expect(messages).not.toContain("SECRET_PENDING_TOKEN");
+    expect(callback.writeStoredToken).not.toHaveBeenCalled();
+  });
+
+  it("returns non-zero when secure token storage fails", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const writeError = jest.fn<(message: string) => void>();
+    const callback = callbackDependencies();
+    const writeStoredToken = jest
+      .fn<(tokenFile: string, token: string) => Promise<void>>()
+      .mockRejectedValue(new Error("storage unavailable"));
+    const prepareOidcLogin = jest
+      .fn<() => Promise<PreparedOidcLogin>>()
+      .mockResolvedValue({
+        authorizationUrl: new URL(
+          "https://idp.example/auth?nonce=SECRET_NONCE&state=SECRET_STATE&redirect_uri=http%3A%2F%2F127.0.0.1%3A18931%2Fcallback&response_mode=query",
+        ),
+        nonce: "SECRET_NONCE",
+        expectedState: "SECRET_STATE",
+      });
+
+    const result = await runCli(["node", "dist/index.js", "oidc-login"], {
+      startServer: jest.fn<() => Promise<void>>(),
+      oidcLogin: () =>
+        oidcLogin({
+          ...callback,
+          prepareOidcLogin,
+          writeStoredToken,
+          writeError,
+        }),
+      writeError,
+    });
+
+    expect(result).toBe(1);
+    expect(writeStoredToken).toHaveBeenCalledTimes(1);
+    expect(writeError).toHaveBeenCalledWith(
+      "Error running oidc-login: storage unavailable",
+    );
+    expect(writeError.mock.calls.flat().join(" ")).not.toContain(
+      "test-access-token",
+    );
+    expect(writeError.mock.calls.flat().join(" ")).not.toContain(
+      "SECRET_NONCE",
+    );
   });
 
   it("returns non-zero on preparation failure", async () => {

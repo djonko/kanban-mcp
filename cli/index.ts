@@ -24,6 +24,7 @@ import {
   type ExchangeOidcCodeDependencies,
   type ExchangeOidcCodeResult,
 } from "../operations/oidc.js";
+import { writeStoredToken as defaultWriteStoredToken } from "../common/token-store.js";
 
 export type Command =
   | { command: "server" }
@@ -52,7 +53,7 @@ export function resolveCommand(argv: string[]): Command {
     "",
     "Usage:",
     "  planka-mcp-server              Start the MCP stdio server (default)",
-    "  planka-mcp-server oidc-login   Complete OIDC exchange (without persistence)",
+    "  planka-mcp-server oidc-login   Authenticate with OIDC and store the access token",
     "",
     `Unknown command: ${arg}`,
   ].join("\n");
@@ -76,10 +77,11 @@ export interface OidcLoginDependencies {
     input: { code: string; nonce: string },
     dependencies?: Partial<ExchangeOidcCodeDependencies>,
   ) => Promise<ExchangeOidcCodeResult>;
+  writeStoredToken: (tokenFile: string, token: string) => Promise<void>;
 }
 
 export interface OidcLoginResult extends PreparedOidcLogin {
-  accessToken: string;
+  tokenFile: string;
 }
 
 export async function oidcLogin(
@@ -140,8 +142,10 @@ export async function oidcLogin(
     code: callback.code,
     nonce: prepared.nonce,
   });
+  const storeToken = dependencies.writeStoredToken ?? defaultWriteStoredToken;
+  await storeToken(config.tokenFile, exchanged.accessToken);
 
-  return { ...prepared, accessToken: exchanged.accessToken };
+  return { ...prepared, tokenFile: config.tokenFile };
 }
 
 export async function runCli(
