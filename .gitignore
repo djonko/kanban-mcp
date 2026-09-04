@@ -5,4 +5,5 @@ coverage/
 .cursorrules
 .cursor/mcp.json
 .cursor
+.opencode
 .idea
