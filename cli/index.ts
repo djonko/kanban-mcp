@@ -19,6 +19,11 @@ import {
   redactAuthorizationUrl,
   type BrowserLaunchResult,
 } from "./browser-launch.js";
+import {
+  exchangeOidcCode as defaultExchangeOidcCode,
+  type ExchangeOidcCodeDependencies,
+  type ExchangeOidcCodeResult,
+} from "../operations/oidc.js";
 
 export type Command =
   | { command: "server" }
@@ -47,7 +52,7 @@ export function resolveCommand(argv: string[]): Command {
     "",
     "Usage:",
     "  planka-mcp-server              Start the MCP stdio server (default)",
-    "  planka-mcp-server oidc-login   Prepare authorization and callback listener",
+    "  planka-mcp-server oidc-login   Complete OIDC exchange (without persistence)",
     "",
     `Unknown command: ${arg}`,
   ].join("\n");
@@ -66,14 +71,15 @@ export interface OidcLoginDependencies {
   ) => Promise<OidcCallbackServerHandle>;
   launchBrowser: (authorizationUrl: URL) => Promise<BrowserLaunchResult>;
   writeError: (message: string) => void;
+  exchangeOidcCode: (
+    baseUrl: string,
+    input: { code: string; nonce: string },
+    dependencies?: Partial<ExchangeOidcCodeDependencies>,
+  ) => Promise<ExchangeOidcCodeResult>;
 }
 
 export interface OidcLoginResult extends PreparedOidcLogin {
-  callbackServer: OidcCallbackServerHandle;
-}
-
-function isOidcLoginResult(value: OidcLoginResult | void): value is OidcLoginResult {
-  return value !== undefined && value.callbackServer !== undefined;
+  accessToken: string;
 }
 
 export async function oidcLogin(
@@ -128,7 +134,14 @@ export async function oidcLogin(
     throw error;
   }
 
-  return { ...prepared, callbackServer };
+  const callback = await callbackServer.waitForCallback;
+  const exchange = dependencies.exchangeOidcCode ?? defaultExchangeOidcCode;
+  const exchanged = await exchange(baseUrl, {
+    code: callback.code,
+    nonce: prepared.nonce,
+  });
+
+  return { ...prepared, accessToken: exchanged.accessToken };
 }
 
 export async function runCli(
@@ -146,10 +159,7 @@ export async function runCli(
     if (command.command === "server") {
       await dependencies.startServer();
     } else {
-      const result = await dependencies.oidcLogin();
-      if (isOidcLoginResult(result)) {
-        await result.callbackServer.waitForCallback;
-      }
+      await dependencies.oidcLogin();
     }
 
     return 0;

@@ -8,6 +8,7 @@ import {
 } from "../../cli/index.js";
 import type { OidcCallbackServerHandle } from "../../cli/oidc-callback-server.js";
 import type { PreparedOidcLogin } from "../../cli/oidc-login.js";
+import type { ExchangeOidcCodeResult } from "../../operations/oidc.js";
 
 function callbackDependencies() {
   const close = jest.fn<() => Promise<void>>().mockResolvedValue();
@@ -30,6 +31,14 @@ function callbackDependencies() {
     launchBrowser: jest
       .fn<(authorizationUrl: URL) => Promise<{ launched: boolean }>>()
       .mockResolvedValue({ launched: true }),
+    exchangeOidcCode: jest
+      .fn<
+        (
+          baseUrl: string,
+          input: { code: string; nonce: string },
+        ) => Promise<ExchangeOidcCodeResult>
+      >()
+      .mockResolvedValue({ accessToken: "test-access-token" }),
     callbackServer,
   };
 }
@@ -107,6 +116,12 @@ describe("oidcLogin", () => {
     expect(result.nonce).toBe("n1");
     expect(result.expectedState).toBe("s1");
     expect(callback.startOidcCallbackServer).toHaveBeenCalled();
+    expect(callback.exchangeOidcCode).toHaveBeenCalledWith(
+      "https://planka.example",
+      { code: "callback-code", nonce: "n1" },
+    );
+    expect(callback.exchangeOidcCode).toHaveBeenCalledTimes(1);
+    expect(result.accessToken).toBe("test-access-token");
     expect(stderr).not.toHaveBeenCalled();
   });
 
@@ -144,19 +159,13 @@ describe("oidcLogin", () => {
 
   it("returns non-zero when the callback fails", async () => {
     const writeError = jest.fn<(message: string) => void>();
-    const callback = callbackDependencies();
-    const callbackFailure = Promise.reject(new Error("callback failed"));
-    void callbackFailure.catch(() => {});
-    callback.callbackServer.waitForCallback = callbackFailure;
+    const callbackFailure = new Error("callback failed");
 
     const result = await runCli(["node", "dist/index.js", "oidc-login"], {
       startServer: jest.fn<() => Promise<void>>(),
-      oidcLogin: jest.fn<() => Promise<OidcLoginResult>>().mockResolvedValue({
-        authorizationUrl: new URL("https://idp.example/auth"),
-        nonce: "nonce",
-        expectedState: "state",
-        callbackServer: callback.callbackServer,
-      }),
+      oidcLogin: jest
+        .fn<() => Promise<OidcLoginResult>>()
+        .mockRejectedValue(callbackFailure),
       writeError,
     });
 
@@ -164,6 +173,81 @@ describe("oidcLogin", () => {
     expect(writeError).toHaveBeenCalledWith(
       "Error running oidc-login: callback failed",
     );
+  });
+
+  it("does not exchange when callback validation fails", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const callback = callbackDependencies();
+    const callbackFailure = Promise.reject(new Error("callback denied"));
+    void callbackFailure.catch(() => {});
+    callback.callbackServer.waitForCallback = callbackFailure;
+    const exchangeOidcCode = jest
+      .fn<
+        (
+          baseUrl: string,
+          input: { code: string; nonce: string },
+        ) => Promise<ExchangeOidcCodeResult>
+      >()
+      .mockResolvedValue({ accessToken: "SECRET_ACCESS_TOKEN" });
+    const prepareOidcLogin = jest
+      .fn<() => Promise<PreparedOidcLogin>>()
+      .mockResolvedValue({
+        authorizationUrl: new URL(
+          "https://idp.example/auth?nonce=SECRET_NONCE&state=state&redirect_uri=http%3A%2F%2F127.0.0.1%3A18931%2Fcallback&response_mode=query",
+        ),
+        nonce: "SECRET_NONCE",
+        expectedState: "state",
+      });
+
+    await expect(
+      oidcLogin({ ...callback, prepareOidcLogin, exchangeOidcCode }),
+    ).rejects.toThrow("callback denied");
+    expect(exchangeOidcCode).not.toHaveBeenCalled();
+  });
+
+  it("reports exchange failure without exposing exchange secrets", async () => {
+    process.env.PLANKA_BASE_URL = "https://planka.example";
+    const writeError = jest.fn<(message: string) => void>();
+    const callback = callbackDependencies();
+    const exchangeOidcCode = jest
+      .fn<
+        (
+          baseUrl: string,
+          input: { code: string; nonce: string },
+        ) => Promise<ExchangeOidcCodeResult>
+      >()
+      .mockRejectedValue(
+        new Error("Planka rejected the OIDC authorization code (HTTP 401)."),
+      );
+    const prepareOidcLogin = jest
+      .fn<() => Promise<PreparedOidcLogin>>()
+      .mockResolvedValue({
+        authorizationUrl: new URL(
+          "https://idp.example/auth?nonce=SECRET_NONCE&state=SECRET_STATE&redirect_uri=http%3A%2F%2F127.0.0.1%3A18931%2Fcallback&response_mode=query",
+        ),
+        nonce: "SECRET_NONCE",
+        expectedState: "SECRET_STATE",
+      });
+
+    const result = await runCli(["node", "dist/index.js", "oidc-login"], {
+      startServer: jest.fn<() => Promise<void>>(),
+      oidcLogin: () =>
+        oidcLogin({
+          ...callback,
+          prepareOidcLogin,
+          exchangeOidcCode,
+          writeError,
+        }),
+      writeError,
+    });
+
+    expect(result).toBe(1);
+    expect(exchangeOidcCode).toHaveBeenCalledTimes(1);
+    const messages = writeError.mock.calls.flat().join(" ");
+    expect(messages).not.toContain("SECRET_NONCE");
+    expect(messages).not.toContain("SECRET_STATE");
+    expect(messages).not.toContain("SECRET_ACCESS_TOKEN");
+    expect(messages).not.toContain("SECRET_PENDING_TOKEN");
   });
 
   it("returns non-zero on preparation failure", async () => {
