@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: gitea-runner3
+    runs-on: gitea-runner3:self-hosted
     steps:
       - uses: actions/checkout@v4
 

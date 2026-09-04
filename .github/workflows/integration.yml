@@ -10,7 +10,7 @@ on:
 
 jobs:
   integration:
-    runs-on: gitea-runner3
+    runs-on: gitea-runner3:self-hosted
     env:
       PLANKA_BASE_URL: http://localhost:3333
       PLANKA_AGENT_EMAIL: demo@demo.demo
