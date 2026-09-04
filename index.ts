@@ -3,6 +3,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { z } from "zod";
 
+import { oidcLogin, runCli } from "./cli/index.js";
+
 // Import Planka operations
 import * as boardMemberships from "./operations/boardMemberships.js";
 import * as boards from "./operations/boards.js";
@@ -798,7 +800,10 @@ async function runServer() {
   await server.connect(transport);
 }
 
-runServer().catch((err) => {
-  console.error("Error running server:", err);
-  process.exit(1);
+runCli(process.argv, {
+  startServer: runServer,
+  oidcLogin,
+  writeError: (message) => console.error(message),
+}).then((exitCode) => {
+  process.exitCode = exitCode;
 });
