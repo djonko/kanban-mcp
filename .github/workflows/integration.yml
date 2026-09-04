@@ -1,0 +1,60 @@
+name: Integration (live Planka 2.1.x)
+
+# Live integration suite against a real Planka container. Kept OFF the PR path
+# (manual dispatch + a weekly run) so the fast CI workflow stays green and
+# deterministic. Adjust or remove the schedule as desired.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC
+
+jobs:
+  integration:
+    runs-on: self-hosted
+    env:
+      PLANKA_BASE_URL: http://localhost:3333
+      PLANKA_AGENT_EMAIL: demo@demo.demo
+      PLANKA_AGENT_PASSWORD: demo
+      PLANKA_ADMIN_EMAIL: demo@demo.demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write compose env (CI has no committed .env)
+        run: |
+          {
+            echo "PLANKA_PORT=3333"
+            echo "BASE_URL=http://localhost:3333"
+            echo "TRUST_PROXY=1"
+            echo "SECRET_KEY=ci-integration-not-a-real-secret"
+            echo "POSTGRES_DB=planka"
+            echo "POSTGRES_USER=planka"
+            echo "POSTGRES_PASSWORD=planka"
+            echo "PLANKA_ADMIN_EMAIL=demo@demo.demo"
+            echo "PLANKA_ADMIN_PASSWORD=demo"
+            echo "PLANKA_ADMIN_NAME=Demo Admin"
+            echo "PLANKA_ADMIN_USERNAME=demo"
+          } > .env
+
+      - name: Start Planka 2.1.1
+        run: npm run up
+
+      - name: Wait for Planka to be ready
+        run: bash scripts/wait-for-planka.sh "$PLANKA_BASE_URL" 120
+
+      - name: Accept terms (provision first login)
+        run: bash scripts/accept-planka-terms.sh "$PLANKA_BASE_URL" "$PLANKA_AGENT_EMAIL" "$PLANKA_AGENT_PASSWORD"
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Tear down
+        if: always()
+        run: npm run down

@@ -14,7 +14,9 @@ export const PlankaUserSchema = z.object({
 export const PlankaProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
-  background: z.string().nullable(),
+  // Planka 2.1.1 omits `background` entirely when none is set (not even null),
+  // so the field must be optional as well as nullable.
+  background: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string().nullable(),
 });
@@ -67,7 +69,10 @@ export const PlankaCardSchema = z.object({
 
 export const PlankaTaskSchema = z.object({
   id: z.string(),
-  cardId: z.string(),
+  // Planka v2.1 nests tasks under task lists: the task carries taskListId, plus
+  // linkedCardId when the task links to a card.
+  taskListId: z.string().optional(),
+  linkedCardId: z.string().nullable().optional(),
   name: z.string(),
   isCompleted: z.boolean(),
   position: z.number(),

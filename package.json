@@ -1,6 +1,6 @@
 {
   "name": "mcp-kanban",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "MCP server for kanban board",
   "license": "MIT",
   "author": "Brad Risse",
@@ -23,18 +23,24 @@
     "start-node": "node dist/index.js",
     "inspector": "SERVER_PORT=3008 CLIENT_PORT=5174 npx -y @modelcontextprotocol/inspector node dist/index.js",
     "inspector:demo": "SERVER_PORT=3008 CLIENT_PORT=5174 npx -y @modelcontextprotocol/inspector -e PLANKA_BASE_URL=http://localhost:3000 -e PLANKA_ADMIN_ID=1460688047300412417 -e PLANKA_AGENT_EMAIL=claude-sic-score-front-end@cursor.com -e PLANKA_AGENT_PASSWORD=supersupersecre1 node dist/index.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testMatch='**/tests/**/*.test.ts'"
+    "test": "npm run test:unit",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.integration.config.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "lint": "biome check",
+    "format": "biome format --write",
+    "check": "biome check --write"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.6.1",
     "@types/node": "^22",
-    "@types/node-fetch": "^2.6.12",
-    "node-fetch": "^3.3.2",
     "universal-user-agent": "^7.0.2",
     "zod": "^3.22.4",
     "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.0",
     "@jest/globals": "^29.7.0",
     "@types/jest": "^29.5.14",
     "jest": "^29.7.0",

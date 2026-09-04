@@ -102,6 +102,31 @@ const TaskResponseSchema = z.object({
 // Map to store task ID to card ID mapping
 const taskCardIdMap: Record<string, string> = {};
 
+/**
+ * Ensures a card has at least one task list and returns its id.
+ *
+ * Planka v2 nests tasks under task lists (card -> task-list -> tasks), so a
+ * task list must exist before a task can be created. Reuses the first existing
+ * task list on the card, otherwise creates one named "Tasks".
+ *
+ * @param {string} cardId - The card to ensure a task list on
+ * @returns {Promise<string>} The task list id
+ */
+async function ensureTaskListId(cardId: string): Promise<string> {
+    const cardResponse = await plankaRequest(`/api/cards/${cardId}`) as {
+        included?: { taskLists?: Array<{ id: string }> };
+    };
+    const existing = cardResponse?.included?.taskLists;
+    if (Array.isArray(existing) && existing.length > 0) {
+        return existing[0].id;
+    }
+    const created = await plankaRequest(
+        `/api/cards/${cardId}/task-lists`,
+        { method: "POST", body: { name: "Tasks", position: 65535 } },
+    ) as { item: { id: string } };
+    return created.item.id;
+}
+
 // Function implementations
 /**
  * Creates a new task for a card
@@ -120,8 +145,10 @@ export async function createTask(params: {
     try {
         const { cardId, name, position = 65535 } = params;
 
+        // Planka v2: tasks live under a task list, not directly on the card.
+        const taskListId = await ensureTaskListId(cardId);
         const response: any = await plankaRequest(
-            `/api/cards/${cardId}/tasks`,
+            `/api/task-lists/${taskListId}/tasks`,
             {
                 method: "POST",
                 body: { name, position },

@@ -71,6 +71,23 @@ async function authenticateAgent(): Promise<string> {
 
     const responseBody = await parseResponseBody(response);
 
+    // Planka 2.1.x gates the first login behind terms-of-service acceptance,
+    // returning 403 + a pendingToken instead of a token. Surface an actionable
+    // error rather than an opaque permission failure.
+    if (
+      !response.ok &&
+      typeof responseBody === "object" &&
+      responseBody !== null &&
+      (responseBody as { step?: string }).step === "accept-terms"
+    ) {
+      throw new Error(
+        "Planka requires terms-of-service acceptance for this account before an " +
+          "access token can be issued. Accept terms once (in the Planka UI, or " +
+          "run `scripts/accept-planka-terms.sh <baseUrl> <email> <password>`), " +
+          "then retry.",
+      );
+    }
+
     if (!response.ok) {
       throw createPlankaError(response.status, responseBody);
     }
@@ -111,54 +128,82 @@ export async function plankaRequest(
 
   const url = new URL(normalizedPath, normalizedBaseUrl).toString();
 
-  const headers: Record<string, string> = {
-    "Accept": "application/json",
-    "Content-Type": "application/json",
-    "User-Agent": USER_AGENT,
-    ...options.headers,
-  };
+  // Two attempts: if a cached token is rejected with 401, clear it and
+  // re-authenticate once so a long-lived server self-heals from an expired or
+  // revoked token instead of failing every request until restart.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const headers: Record<string, string> = {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "User-Agent": USER_AGENT,
+      ...options.headers,
+    };
 
-  // Remove Content-Type header for FormData
-  if (options.body instanceof FormData) {
-    delete headers["Content-Type"];
-  }
+    // Remove Content-Type header for FormData
+    if (options.body instanceof FormData) {
+      delete headers["Content-Type"];
+    }
 
-  // Add authentication token if not skipped
-  if (!options.skipAuth) {
+    // Add authentication token if not skipped
+    if (!options.skipAuth) {
+      try {
+        const token = await getAuthToken();
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error
+          ? error.message
+          : String(error);
+        throw new Error(`Failed to get authentication token: ${errorMessage}`);
+      }
+    }
+
+    let response: Response;
+    let responseBody: unknown;
     try {
-      const token = await getAuthToken();
-      headers["Authorization"] = `Bearer ${token}`;
+      response = await fetch(url, {
+        method: options.method || "GET",
+        headers,
+        body: options.body instanceof FormData
+          ? options.body
+          : options.body
+          ? JSON.stringify(options.body)
+          : undefined,
+        credentials: "include", // Include cookies for Planka authentication
+      });
+
+      responseBody = await parseResponseBody(response);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error
         ? error.message
         : String(error);
-      throw new Error(`Failed to get authentication token: ${errorMessage}`);
+      throw new Error(
+        `Failed to make Planka request to ${url}: ${errorMessage}`,
+      );
     }
-  }
 
-  try {
-    const response = await fetch(url, {
-      method: options.method || "GET",
-      headers,
-      body: options.body instanceof FormData
-        ? options.body
-        : options.body
-        ? JSON.stringify(options.body)
-        : undefined,
-      credentials: "include", // Include cookies for Planka authentication
-    });
-
-    const responseBody = await parseResponseBody(response);
+    if (
+      response.status === 401 && !options.skipAuth && attempt === 0 &&
+      agentToken
+    ) {
+      // Cached token rejected — drop it and retry with a fresh login.
+      agentToken = null;
+      continue;
+    }
 
     if (!response.ok) {
-      throw createPlankaError(response.status, responseBody);
+      const plankaError = createPlankaError(response.status, responseBody);
+      throw new Error(
+        `Failed to make Planka request to ${url}: ${plankaError.message}`,
+      );
     }
 
     return responseBody;
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to make Planka request to ${url}: ${errorMessage}`);
   }
+
+  // Unreachable: every path inside the loop returns or throws.
+  throw new Error(
+    `Failed to make Planka request to ${url}: authentication retry exhausted`,
+  );
 }
 
 export function validateProjectName(name: string): string {
@@ -200,24 +245,15 @@ export function validateCardName(name: string): string {
  * @returns {Promise<string | null>} The user ID if found, null otherwise
  */
 export async function getUserIdByEmail(email: string): Promise<string | null> {
-  try {
-    // Get all users
-    const response = await plankaRequest("/api/users");
-    const { items } = response as {
-      items: Array<{ id: string; email: string }>;
-    };
+  // Let request errors propagate so a failed lookup is distinguishable from
+  // "no such user" (which legitimately returns null).
+  const response = await plankaRequest("/api/users");
+  const { items } = response as {
+    items: Array<{ id: string; email: string }>;
+  };
 
-    // Find the user with the matching email
-    const user = items.find((user) => user.email === email);
-    return user ? user.id : null;
-  } catch (error) {
-    console.error(
-      `Failed to get user ID by email: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return null;
-  }
+  const user = items.find((user) => user.email === email);
+  return user ? user.id : null;
 }
 
 /**
@@ -229,22 +265,13 @@ export async function getUserIdByEmail(email: string): Promise<string | null> {
 export async function getUserIdByUsername(
   username: string,
 ): Promise<string | null> {
-  try {
-    // Get all users
-    const response = await plankaRequest("/api/users");
-    const { items } = response as {
-      items: Array<{ id: string; username: string }>;
-    };
+  // Let request errors propagate so a failed lookup is distinguishable from
+  // "no such user" (which legitimately returns null).
+  const response = await plankaRequest("/api/users");
+  const { items } = response as {
+    items: Array<{ id: string; username: string }>;
+  };
 
-    // Find the user with the matching username
-    const user = items.find((user) => user.username === username);
-    return user ? user.id : null;
-  } catch (error) {
-    console.error(
-      `Failed to get user ID by username: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return null;
-  }
+  const user = items.find((user) => user.username === username);
+  return user ? user.id : null;
 }

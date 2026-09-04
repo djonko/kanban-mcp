@@ -15,11 +15,16 @@ import { PlankaListSchema } from "../common/types.js";
  * @property {string} boardId - The ID of the board to create the list in
  * @property {string} name - The name of the list
  * @property {number} [position] - The position of the list in the board (default: 65535)
+ * @property {string} [type] - The kanban list type (default: active)
  */
 export const CreateListSchema = z.object({
     boardId: z.string().describe("Board ID"),
     name: z.string().describe("List name"),
     position: z.number().optional().describe("List position (default: 65535)"),
+    // Planka v2.1 requires a kanban list type on create (active | closed).
+    type: z.enum(["active", "closed"]).optional().describe(
+        "List type (default: active)",
+    ),
 });
 
 /**
@@ -92,6 +97,8 @@ export async function createList(options: CreateListOptions) {
                 body: {
                     name: options.name,
                     position: options.position,
+                    // Planka v2.1 requires `type`; default to an active kanban list.
+                    type: options.type ?? "active",
                 },
             },
         );

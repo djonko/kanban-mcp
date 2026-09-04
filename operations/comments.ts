@@ -3,6 +3,11 @@
  *
  * This module provides functions for interacting with comments in the Planka Kanban board,
  * including creating, retrieving, updating, and deleting comments on cards.
+ *
+ * Planka v2 note: comments are first-class resources under
+ * `/api/cards/:cardId/comments` (and `/api/comments/:id`). Earlier Planka modeled
+ * them as `commentCard` actions under `/api/cards/:cardId/comment-actions` — this
+ * module was updated for the v2 routes (homelab Planka 2.1.1).
  */
 
 import { z } from "zod";
@@ -64,27 +69,26 @@ export type CreateCommentOptions = z.infer<typeof CreateCommentSchema>;
  */
 export type UpdateCommentOptions = z.infer<typeof UpdateCommentSchema>;
 
-// Comment action schema
-const CommentActionSchema = z.object({
+// Comment schema (Planka v2: first-class comment, `text` at the top level —
+// not the old `commentCard` action with `data.text`). Permissive on extra
+// fields so minor shape changes across point releases don't break parsing.
+const CommentSchema = z.object({
     id: z.string(),
-    type: z.literal("commentCard"),
-    data: z.object({
-        text: z.string(),
-    }),
-    cardId: z.string(),
-    userId: z.string(),
-    createdAt: z.string(),
-    updatedAt: z.string().nullable(),
-});
+    text: z.string(),
+    cardId: z.string().optional(),
+    userId: z.string().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().nullable().optional(),
+}).passthrough();
 
 // Response schemas
-const CommentActionsResponseSchema = z.object({
-    items: z.array(CommentActionSchema),
+const CommentsResponseSchema = z.object({
+    items: z.array(CommentSchema),
     included: z.record(z.any()).optional(),
 });
 
-const CommentActionResponseSchema = z.object({
-    item: CommentActionSchema,
+const CommentResponseSchema = z.object({
+    item: CommentSchema,
     included: z.record(z.any()).optional(),
 });
 
@@ -93,15 +97,13 @@ const CommentActionResponseSchema = z.object({
  * Creates a new comment on a card
  *
  * @param {CreateCommentOptions} options - Options for creating the comment
- * @param {string} options.cardId - The ID of the card to create the comment on
- * @param {string} options.text - The text content of the comment
  * @returns {Promise<object>} The created comment
  * @throws {Error} If the comment creation fails
  */
 export async function createComment(options: CreateCommentOptions) {
     try {
         const response = await plankaRequest(
-            `/api/cards/${options.cardId}/comment-actions`,
+            `/api/cards/${options.cardId}/comments`,
             {
                 method: "POST",
                 body: {
@@ -109,7 +111,7 @@ export async function createComment(options: CreateCommentOptions) {
                 },
             },
         );
-        const parsedResponse = CommentActionResponseSchema.parse(response);
+        const parsedResponse = CommentResponseSchema.parse(response);
         return parsedResponse.item;
     } catch (error) {
         throw new Error(
@@ -125,45 +127,29 @@ export async function createComment(options: CreateCommentOptions) {
  *
  * @param {string} cardId - The ID of the card to get comments for
  * @returns {Promise<Array<object>>} Array of comments on the card
- * @throws {Error} If retrieving comments fails
  */
 export async function getComments(cardId: string) {
+    // Let request errors propagate; only a genuinely empty card yields [].
+    const response = await plankaRequest(`/api/cards/${cardId}/comments`);
+
     try {
-        const response = await plankaRequest(`/api/cards/${cardId}/actions`);
-
-        try {
-            // Try to parse as a CommentsResponseSchema first
-            const parsedResponse = CommentActionsResponseSchema.parse(response);
-            // Filter only comment actions
-            if (parsedResponse.items && Array.isArray(parsedResponse.items)) {
-                return parsedResponse.items.filter((item) =>
-                    item.type === "commentCard"
-                );
-            }
-            return parsedResponse.items;
-        } catch (parseError) {
-            // If that fails, try to parse as an array directly
-            if (Array.isArray(response)) {
-                const items = z.array(CommentActionSchema).parse(response);
-                // Filter only comment actions
-                return items.filter((item) => item.type === "commentCard");
-            }
-
-            // If we get here, we couldn't parse the response in any expected format
-            throw new Error(
-                `Could not parse comments response: ${
-                    JSON.stringify(response)
-                }`,
-            );
+        const parsedResponse = CommentsResponseSchema.parse(response);
+        return parsedResponse.items;
+    } catch (parseError) {
+        if (Array.isArray(response)) {
+            return z.array(CommentSchema).parse(response);
         }
-    } catch (error) {
-        // If all else fails, return an empty array
-        return [];
+        throw new Error(
+            `Could not parse comments response: ${JSON.stringify(response)}`,
+        );
     }
 }
 
 /**
  * Retrieves a specific comment by ID
+ *
+ * Planka has no GET-by-id route for a single comment, so this walks the boards
+ * and cards and matches the comment id within each card's comment list.
  *
  * @param {string} id - The ID of the comment to retrieve
  * @returns {Promise<object>} The requested comment
@@ -171,7 +157,6 @@ export async function getComments(cardId: string) {
  */
 export async function getComment(id: string) {
     try {
-        // Get all projects which includes boards
         const projectsResponse = await plankaRequest(`/api/projects`);
 
         if (
@@ -186,15 +171,11 @@ export async function getComment(id: string) {
 
         const included = projectsResponse.included as Record<string, unknown>;
 
-        // Get all boards
         if (!("boards" in included) || !Array.isArray(included.boards)) {
             throw new Error("No boards found");
         }
 
-        const boards = included.boards;
-
-        // Check each board for cards
-        for (const board of boards) {
+        for (const board of included.boards) {
             if (
                 typeof board !== "object" || board === null || !("id" in board)
             ) {
@@ -202,8 +183,6 @@ export async function getComment(id: string) {
             }
 
             const boardId = board.id as string;
-
-            // Get the board details which includes cards
             const boardResponse = await plankaRequest(`/api/boards/${boardId}`);
 
             if (
@@ -228,10 +207,7 @@ export async function getComment(id: string) {
                 continue;
             }
 
-            const cards = boardIncluded.cards;
-
-            // Check each card for the comment
-            for (const card of cards) {
+            for (const card of boardIncluded.cards) {
                 if (
                     typeof card !== "object" || card === null || !("id" in card)
                 ) {
@@ -239,31 +215,22 @@ export async function getComment(id: string) {
                 }
 
                 const cardId = card.id as string;
-
-                // Get the card actions
-                const actionsResponse = await plankaRequest(
-                    `/api/cards/${cardId}/actions`,
+                const commentsResponse = await plankaRequest(
+                    `/api/cards/${cardId}/comments`,
                 );
 
                 if (
-                    !actionsResponse ||
-                    typeof actionsResponse !== "object" ||
-                    !("items" in actionsResponse) ||
-                    !Array.isArray(actionsResponse.items)
+                    !commentsResponse ||
+                    typeof commentsResponse !== "object" ||
+                    !("items" in commentsResponse) ||
+                    !Array.isArray(commentsResponse.items)
                 ) {
                     continue;
                 }
 
-                const actions = actionsResponse.items;
-
-                // Find the comment with the matching ID
-                const comment = actions.find((action) =>
-                    typeof action === "object" &&
-                    action !== null &&
-                    "id" in action &&
-                    action.id === id &&
-                    "type" in action &&
-                    action.type === "commentCard"
+                const comment = commentsResponse.items.find((c) =>
+                    typeof c === "object" && c !== null && "id" in c &&
+                    (c as { id: unknown }).id === id
                 );
 
                 if (comment) {
@@ -287,7 +254,6 @@ export async function getComment(id: string) {
  *
  * @param {string} id - The ID of the comment to update
  * @param {Partial<Omit<CreateCommentOptions, "cardId">>} options - The properties to update
- * @param {string} options.text - The new text content for the comment
  * @returns {Promise<object>} The updated comment
  * @throws {Error} If updating the comment fails
  */
@@ -296,13 +262,13 @@ export async function updateComment(
     options: Partial<Omit<CreateCommentOptions, "cardId">>,
 ) {
     try {
-        const response = await plankaRequest(`/api/comment-actions/${id}`, {
+        const response = await plankaRequest(`/api/comments/${id}`, {
             method: "PATCH",
             body: {
                 text: options.text,
             },
         });
-        const parsedResponse = CommentActionResponseSchema.parse(response);
+        const parsedResponse = CommentResponseSchema.parse(response);
         return parsedResponse.item;
     } catch (error) {
         throw new Error(
@@ -322,7 +288,7 @@ export async function updateComment(
  */
 export async function deleteComment(id: string) {
     try {
-        await plankaRequest(`/api/comment-actions/${id}`, {
+        await plankaRequest(`/api/comments/${id}`, {
             method: "DELETE",
         });
         return { success: true };

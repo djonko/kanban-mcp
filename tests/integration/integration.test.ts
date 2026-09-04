@@ -13,25 +13,25 @@
  */
 
 import { afterAll, describe, expect, jest, test } from "@jest/globals";
-import * as boardMemberships from "../operations/boardMemberships.js";
-import * as boards from "../operations/boards.js";
-import * as cards from "../operations/cards.js";
-import * as comments from "../operations/comments.js";
-import * as labels from "../operations/labels.js";
-import * as lists from "../operations/lists.js";
-import * as projects from "../operations/projects.js";
-import * as tasks from "../operations/tasks.js";
+import * as boardMemberships from "../../operations/boardMemberships.js";
+import * as boards from "../../operations/boards.js";
+import * as cards from "../../operations/cards.js";
+import * as comments from "../../operations/comments.js";
+import * as labels from "../../operations/labels.js";
+import * as lists from "../../operations/lists.js";
+import * as projects from "../../operations/projects.js";
+import * as tasks from "../../operations/tasks.js";
 
 // Import custom tools
 import {
   createCardWithTasks,
   getBoardSummary,
   getCardDetails,
-} from "../tools/index.js";
+} from "../../tools/index.js";
 
 // Import utilities for direct API calls
-import { getAdminUserId } from "../common/setup.js";
-import { plankaRequest } from "../common/utils.js";
+import { getAdminUserId } from "../../common/setup.js";
+import { plankaRequest } from "../../common/utils.js";
 
 // Test data
 const testPrefix = `test-${Date.now()}`;
@@ -59,7 +59,8 @@ jest.setTimeout(300000);
 async function createProject(name: string) {
   const response: any = await plankaRequest("/api/projects", {
     method: "POST",
-    body: { name },
+    // Planka v2.1 requires a project `type` (private | shared) on create.
+    body: { name, type: "private" },
   });
   return response.item;
 }
@@ -408,7 +409,7 @@ describe("MCP Kanban Integration Tests", () => {
         text: commentText,
       });
       expect(result).toBeDefined();
-      expect(result.data.text).toBe(commentText);
+      expect(result.text).toBe(commentText);
       commentId = result.id;
     });
 
@@ -422,7 +423,7 @@ describe("MCP Kanban Integration Tests", () => {
       const comment = allComments.find((c) => c.id === commentId);
       expect(comment).toBeDefined();
       expect(comment?.id).toBe(commentId);
-      expect(comment?.data.text).toBe(commentText);
+      expect(comment?.text).toBe(commentText);
     });
 
     test("should update a comment", async () => {
@@ -432,7 +433,7 @@ describe("MCP Kanban Integration Tests", () => {
       });
       expect(result).toBeDefined();
       expect(result.id).toBe(commentId);
-      expect(result.data.text).toBe(updatedText);
+      expect(result.text).toBe(updatedText);
     });
   });
 

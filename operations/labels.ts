@@ -197,33 +197,25 @@ export async function createLabel(options: CreateLabelOptions) {
  * @returns {Promise<Array<object>>} Array of labels in the board
  */
 export async function getLabels(boardId: string) {
-    try {
-        // Get the board which includes labels in the response
-        const response = await plankaRequest(`/api/boards/${boardId}`);
+    // The board detail includes labels. Let request errors propagate; return []
+    // only when the board genuinely has no labels in its included data.
+    const response = await plankaRequest(`/api/boards/${boardId}`);
 
-        // Check if the response has the expected structure
-        if (
-            response &&
-            typeof response === "object" &&
-            "included" in response &&
-            response.included &&
-            typeof response.included === "object" &&
-            "labels" in (response.included as Record<string, unknown>)
-        ) {
-            // Get the labels from the included property
-            const labels =
-                (response.included as Record<string, unknown>).labels;
-            if (Array.isArray(labels)) {
-                return labels;
-            }
+    if (
+        response &&
+        typeof response === "object" &&
+        "included" in response &&
+        response.included &&
+        typeof response.included === "object" &&
+        "labels" in (response.included as Record<string, unknown>)
+    ) {
+        const labels = (response.included as Record<string, unknown>).labels;
+        if (Array.isArray(labels)) {
+            return labels;
         }
-
-        // If we can't find labels in the expected format, return an empty array
-        return [];
-    } catch (error) {
-        // If all else fails, return an empty array
-        return [];
     }
+
+    return [];
 }
 
 /**
@@ -283,9 +275,9 @@ export async function deleteLabel(id: string) {
  */
 export async function addLabelToCard(cardId: string, labelId: string) {
     try {
-        // The correct endpoint is /api/cards/{cardId}/labels with labelId in the body
+        // Planka v2: POST /api/cards/{cardId}/card-labels with labelId in the body
         await plankaRequest(
-            `/api/cards/${cardId}/labels`,
+            `/api/cards/${cardId}/card-labels`,
             {
                 method: "POST",
                 body: {
@@ -313,9 +305,10 @@ export async function addLabelToCard(cardId: string, labelId: string) {
  */
 export async function removeLabelFromCard(cardId: string, labelId: string) {
     try {
-        // The correct endpoint is /api/cards/{cardId}/labels/{labelId}
+        // Planka v2: DELETE /api/cards/{cardId}/card-labels/labelId:{labelId}
+        // (the `labelId:` prefix is Planka's literal path-param format)
         await plankaRequest(
-            `/api/cards/${cardId}/labels/${labelId}`,
+            `/api/cards/${cardId}/card-labels/labelId:${labelId}`,
             {
                 method: "DELETE",
             },

@@ -117,7 +117,7 @@ export async function createBoardMembership(
 ) {
     try {
         const response = await plankaRequest(
-            `/api/boards/${options.boardId}/memberships`,
+            `/api/boards/${options.boardId}/board-memberships`,
             {
                 method: "POST",
                 body: {
@@ -145,34 +145,27 @@ export async function createBoardMembership(
  * @throws {Error} If retrieving board memberships fails
  */
 export async function getBoardMemberships(boardId: string) {
-    try {
-        const response = await plankaRequest(
-            `/api/boards/${boardId}/memberships`,
-        );
+    // Planka v2 has no list route; board memberships ride along in the board
+    // detail's `included.boardMemberships`. Let request errors propagate;
+    // return [] only when there genuinely are none.
+    const response = await plankaRequest(`/api/boards/${boardId}`);
 
-        try {
-            // Try to parse as a BoardMembershipsResponseSchema first
-            const parsedResponse = BoardMembershipsResponseSchema.parse(
-                response,
-            );
-            return parsedResponse.items;
-        } catch (parseError) {
-            // If that fails, try to parse as an array directly
-            if (Array.isArray(response)) {
-                return z.array(BoardMembershipSchema).parse(response);
-            }
-
-            // If we get here, we couldn't parse the response in any expected format
-            throw new Error(
-                `Could not parse board memberships response: ${
-                    JSON.stringify(response)
-                }`,
-            );
+    if (
+        response &&
+        typeof response === "object" &&
+        "included" in response &&
+        response.included &&
+        typeof response.included === "object" &&
+        "boardMemberships" in (response.included as Record<string, unknown>)
+    ) {
+        const memberships =
+            (response.included as Record<string, unknown>).boardMemberships;
+        if (Array.isArray(memberships)) {
+            return memberships;
         }
-    } catch (error) {
-        // If all else fails, return an empty array
-        return [];
     }
+
+    return [];
 }
 
 /**
