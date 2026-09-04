@@ -275,9 +275,11 @@ describe("prepareOidcLogin", () => {
     const result = await prepareOidcLogin("https://planka.example", {
       fetch: fetchFn,
       generateNonce: () => "test-nonce-123",
+      generateState: () => "test-state-123",
     });
 
     expect(result.nonce).toBe("test-nonce-123");
+    expect(result.expectedState).toBe("test-state-123");
     expect(result.authorizationUrl.searchParams.get("nonce")).toBe(
       "test-nonce-123",
     );
@@ -290,6 +292,7 @@ describe("prepareOidcLogin", () => {
     const result = await prepareOidcLogin("https://planka.example", {
       fetch: fetchFn,
       generateNonce: () => "test-nonce-123",
+      generateState: () => "test-state-123",
     });
 
     const url = result.authorizationUrl;
@@ -314,6 +317,7 @@ describe("prepareOidcLogin", () => {
     const result = await prepareOidcLogin("https://planka.example", {
       fetch: fetchFn,
       generateNonce: () => "test-nonce-123",
+      generateState: () => "test-state-123",
     });
 
     const url = result.authorizationUrl;
@@ -335,6 +339,7 @@ describe("prepareOidcLogin", () => {
     const result = await prepareOidcLogin("https://planka.example", {
       fetch: fetchFn,
       generateNonce: () => "new-nonce-value",
+      generateState: () => "new-state-value",
     });
 
     expect(result.authorizationUrl.searchParams.get("nonce")).toBe(

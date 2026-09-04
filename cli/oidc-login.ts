@@ -10,6 +10,7 @@ export interface OidcBootstrap {
 export interface PreparedOidcLogin {
   authorizationUrl: URL;
   nonce: string;
+  expectedState: string;
 }
 
 const bootstrapResponseSchema = z.object({
@@ -104,6 +105,10 @@ export function generateNonce(): string {
   return randomBytes(32).toString("base64url");
 }
 
+export function generateState(): string {
+  return randomBytes(32).toString("base64url");
+}
+
 export function parseAuthorizationUrl(authorizationUrl: string): URL {
   try {
     return new URL(authorizationUrl);
@@ -117,11 +122,13 @@ export function parseAuthorizationUrl(authorizationUrl: string): URL {
 export interface PrepareOidcLoginDependencies
   extends BootstrapRequestDependencies {
   generateNonce: () => string;
+  generateState: () => string;
 }
 
 const defaultDependencies: PrepareOidcLoginDependencies = {
   fetch: globalThis.fetch,
   generateNonce,
+  generateState,
 };
 
 export async function prepareOidcLogin(
@@ -135,14 +142,20 @@ export async function prepareOidcLogin(
 
   const bootstrap = await fetchOidcBootstrap(baseUrl, deps);
   const nonce = deps.generateNonce();
+  const expectedState = deps.generateState();
   const authorizationUrl = parseAuthorizationUrl(
     bootstrap.authorizationUrl,
   );
 
   authorizationUrl.searchParams.set("nonce", nonce);
+  // Planka returns state in its authorization callback (rather than nonce).
+  // Keep a separately generated state for callback correlation; nonce remains
+  // reserved for validation during the later OIDC exchange.
+  authorizationUrl.searchParams.set("state", expectedState);
 
   return {
     authorizationUrl,
     nonce,
+    expectedState,
   };
 }
